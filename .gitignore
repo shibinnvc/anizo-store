@@ -1,9 +1,11 @@
 node_modules/
+node_modules
 .runtime.nosync/
 .secrets.nosync/
 .next-cache.nosync/
 .dependencies-icloud-backup/
 .next/
+.next
 out/
 .env*
 !.env.example
