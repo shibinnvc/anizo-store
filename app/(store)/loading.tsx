@@ -1,0 +1,1 @@
+export default function Loading() { return <div className="store-loading" role="status"><span className="eyebrow">ANIZO</span><div className="loading-line" /><span className="sr-only">Loading the next page</span></div>; }

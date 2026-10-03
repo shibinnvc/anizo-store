@@ -1,0 +1,16 @@
+{
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "storage": { "rules": "storage.rules" },
+  "apphosting": {
+    "backendId": "anizo-store",
+    "rootDir": ".",
+    "ignore": ["node_modules", ".git", ".next", ".next-cache.nosync", ".runtime.nosync", ".secrets.nosync", ".dependencies-icloud-backup", ".env*", "test-results", "playwright-report", "assets"]
+  },
+  "emulators": {
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "firestore": { "host": "127.0.0.1", "port": 8080 },
+    "storage": { "host": "127.0.0.1", "port": 9199 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

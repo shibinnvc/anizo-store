@@ -1,0 +1,116 @@
+import { test, expect } from "@playwright/test";
+import { initializeApp, deleteApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { defaultHero } from "../lib/defaults";
+
+const isolated = process.env.FIREBASE_PROJECT_ID === "demo-anizo" && process.env.FIREBASE_AUTH_EMULATOR_HOST === "127.0.0.1:9099" && process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080";
+test.skip(!isolated, "Run npm run test:workflows to use isolated Firebase emulators.");
+
+test("admin saves fragrance details and sizes; public orders use the selected price and availability", async ({ page, baseURL }) => {
+  test.setTimeout(120000);
+  page.setDefaultTimeout(15000);
+  const app = initializeApp({ projectId: "demo-anizo" }, "product-workflow");
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const email = "workflow-owner@example.test";
+  const password = "Emulator-only-password-42!";
+  let productId = "";
+  const user = await auth.createUser({ email, password });
+  try {
+    await auth.setCustomUserClaims(user.uid, { admin: true });
+    const signIn = await page.request.post("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key", { data: { email, password, returnSecureToken: true } });
+    expect(signIn.ok()).toBe(true);
+    const { idToken } = await signIn.json();
+    const session = await page.request.post("/api/auth/session", { data: { idToken }, headers: { origin: new URL(baseURL!).origin } });
+    expect(await session.text()).toContain("success");
+    expect(session.ok()).toBe(true);
+
+    await page.goto("/admin/products/new");
+    await page.getByLabel("Product name", { exact: true }).fill("Workflow fragrance");
+    await page.getByLabel("Short description", { exact: true }).fill("A fragrance used only in the local test suite.");
+    await page.getByLabel("Full description", { exact: true }).fill("A complete description saved through the admin panel.");
+    const primary = page.locator("section").filter({ has: page.getByRole("heading", { name: "Primary size & price", exact: true }) });
+    await primary.getByLabel("Size / format", { exact: true }).fill("50 ml extrait de parfum");
+    await primary.getByLabel("Original price", { exact: true }).fill("2000");
+    await primary.getByLabel("Discount", { exact: true }).selectOption("percentage");
+    await primary.getByLabel("Discount percentage", { exact: true }).fill("10");
+    await primary.getByLabel("SKU (optional)", { exact: true }).fill("TEST50");
+    await page.getByRole("button", { name: "Add size / format", exact: true }).click();
+    const option = page.locator(".variant-editor");
+    await option.getByLabel("Size / format", { exact: true }).fill("10 ml perfume oil");
+    await option.getByLabel("Original price", { exact: true }).fill("600");
+    await option.getByLabel("Discount", { exact: true }).selectOption("fixed");
+    await option.getByLabel("Discount amount", { exact: true }).fill("100");
+    await option.getByLabel("SKU (optional)", { exact: true }).fill("TESTOIL");
+    await page.getByLabel("Fragrance type / concentration (optional)", { exact: true }).fill("Extrait de parfum & perfume oil");
+    await page.getByLabel("Gender (optional)", { exact: true }).selectOption("unisex");
+    await page.getByLabel(/^Scent profile \/ main accords \(optional\)/).fill("Fresh, Amber");
+    await page.getByLabel("Longevity / lasting (optional)", { exact: true }).fill("Up to 8 hours");
+    await page.getByLabel("Projection (optional)", { exact: true }).fill("2–3 hours");
+    await page.getByLabel(/^top notes \(optional\)$/i).fill("Bergamot");
+    await page.getByLabel(/^heart notes \(optional\)$/i).fill("Rose");
+    await page.getByLabel(/^base notes \(optional\)$/i).fill("Musk");
+    await page.getByLabel("Ingredients (optional)", { exact: true }).fill("Test label ingredients");
+    await page.getByLabel("How to use (optional)", { exact: true }).fill("Apply sparingly.");
+    await page.getByLabel("Shipping & returns (optional)", { exact: true }).fill("Delivery confirmed in WhatsApp.");
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo({ top: 0, behavior: "instant" }); });
+    await page.screenshot({ path: "test-results/admin-product-fields.png", fullPage: true, animations: "disabled" });
+    const saved = page.waitForResponse(response => response.url().includes("/api/admin/products/") && response.request().method() === "PUT");
+    await page.getByRole("button", { name: "Save product", exact: true }).first().click();
+    const savedResponse = await saved;
+    expect(savedResponse.ok()).toBe(true);
+    productId = new URL(savedResponse.url()).pathname.split("/").pop()!;
+    await expect(page).toHaveURL(/\/admin\/products$/);
+    const record = (await db.doc(`products/${productId}`).get()).data()!;
+    expect(record.discountedPrice).toBe(1800);
+    expect(record.variants[0].discountedPrice).toBe(500);
+    expect(record.scentProfile).toEqual(["Fresh", "Amber"]);
+    expect(record.gender).toBe("unisex");
+    expect(record.projection).toBe("2–3 hours");
+    expect(record.shippingAndReturns).toBe("Delivery confirmed in WhatsApp.");
+
+    await page.goto("/products/workflow-fragrance");
+    await expect(page.getByText("A little off the scent.")).toBeVisible();
+    // Use a supplied local image so no upload can reach a live Storage bucket.
+    const publish = await page.request.put(`/api/admin/products/${productId}`, { data: { ...record, active: true, images: [defaultHero.poster], expectedUpdatedAt: record.updatedAt }, headers: { origin: new URL(baseURL!).origin } });
+    expect(publish.ok()).toBe(true);
+    await page.goto("/products/workflow-fragrance");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Workflow fragrance");
+    await expect(page.getByText("Up to 8 hours", { exact: true })).toBeVisible();
+    await expect(page.getByText("2–3 hours", { exact: true })).toBeVisible();
+    await expect(page.getByText("Unisex", { exact: true })).toBeVisible();
+    await page.getByRole("radio", { name: /10 ml perfume oil/ }).check();
+    await page.getByRole("button", { name: "Increase quantity" }).click();
+    const href = await page.getByRole("link", { name: "Buy Workflow fragrance on WhatsApp" }).getAttribute("href");
+    const order = new URL(href!);
+    expect(order.pathname).toBe("/919946120506");
+    expect(order.searchParams.get("text")).toContain("Size: 10 ml perfume oil");
+    expect(order.searchParams.get("text")).toContain("Price: ₹500");
+    expect(order.searchParams.get("text")).toContain("Quantity: 2");
+    expect(order.searchParams.get("text")).toContain(`?variant=${record.variants[0].id}`);
+    await page.reload();
+    await expect(page.getByRole("radio", { name: /10 ml perfume oil/ })).toBeChecked();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo({ top: 0, behavior: "instant" }); });
+    await page.screenshot({ path: "test-results/product-options-mobile.png", fullPage: true, animations: "disabled" });
+
+    await page.goto(`/admin/products/${productId}/edit`);
+    await expect(page.getByLabel("Projection (optional)", { exact: true })).toHaveValue("2–3 hours");
+    await page.locator(".variant-editor").getByRole("checkbox", { name: /Available to order/ }).uncheck();
+    await page.getByRole("button", { name: "Save product", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/admin\/products$/);
+    await page.goto(`/products/workflow-fragrance?variant=${record.variants[0].id}`);
+    await expect(page.getByRole("status").filter({ hasText: "This size is currently sold out" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Buy Workflow fragrance on WhatsApp" })).toHaveCount(0);
+    await page.getByRole("radio", { name: /50 ml extrait de parfum/ }).check();
+    await expect(page.getByRole("link", { name: "Buy Workflow fragrance on WhatsApp" })).toBeVisible();
+    await expect(page.locator(".detail-price")).toContainText("₹1,800");
+  } finally {
+    if (productId) await db.doc(`products/${productId}`).delete();
+    await db.doc("productSlugs/workflow-fragrance").delete();
+    await auth.deleteUser(user.uid);
+    await deleteApp(app);
+  }
+});

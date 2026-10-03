@@ -1,0 +1,8 @@
+{
+  "indexes": [
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "featured", "order": "ASCENDING" }] },
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "slug", "order": "ASCENDING" }] },
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "discountType", "order": "ASCENDING" }, { "fieldPath": "discountValue", "order": "ASCENDING" }] }
+  ],
+  "fieldOverrides": []
+}

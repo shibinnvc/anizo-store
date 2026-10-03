@@ -1,0 +1,8 @@
+import type { Metadata } from "next";
+import { getSiteSettings } from "@/lib/firestore";
+
+export const metadata: Metadata = { title: "Privacy", alternates: { canonical: "/privacy" } };
+export default async function PrivacyPage() {
+  const settings = await getSiteSettings();
+  return <article className="legal-page section-pad"><span className="eyebrow">{settings.brandName} / PRIVACY</span><h1>Your privacy.</h1><p>This website lets you explore fragrances without creating a customer account. It does not collect a delivery address or process payments on the site.</p><h2>When you place an order</h2><p>Our purchase links open WhatsApp with the selected product and price in a prepared message. You choose whether to send it. Information you share in that conversation, including contact and delivery details, is handled by our business to respond to your request and arrange your order. WhatsApp’s own privacy terms also apply.</p><h2>Website services</h2><p>The website uses Firebase and its hosting provider to deliver content and maintain security. These providers may process technical request information such as IP addresses and access logs. No advertising trackers or marketing cookies are installed by this application.</p><h2>Administrator access</h2><p>Authorized administrators use Firebase Authentication and an essential session cookie to securely maintain the website. Customer browsing does not require this cookie.</p><h2>Contact</h2><p>For questions about information shared with our business, contact us {settings.contactEmail ? <a href={`mailto:${settings.contactEmail}`}>at {settings.contactEmail}</a> : "through the contact details provided on this website"}.</p></article>;
+}

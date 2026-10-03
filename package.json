@@ -1,0 +1,47 @@
+{
+  "name": "anizo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
+    "test:workflows": "node scripts/test-workflows.mjs",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-anizo 'tsx --test tests/rules.integration.ts'",
+    "admin:grant": "node --env-file=.env.local scripts/admin.mjs",
+    "content:seed": "tsx --env-file=.env.local scripts/seed.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
+    "motion": "^13.2.0",
+    "next": "^16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.5.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "eslint": "~9.39.5",
+    "eslint-config-next": "^16.3.4",
+    "firebase-tools": "^15.29.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "uuid@<11.1.1": "^11.1.1"
+  }
+}

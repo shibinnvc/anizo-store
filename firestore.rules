@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() { return request.auth != null && request.auth.token.admin == true; }
+    function validVariantAt(variants, index) {
+      return variants.size() <= index || (
+        variants[index] is map
+        && variants[index].id is string && variants[index].id.matches('^[a-zA-Z0-9_-]{1,80}$') && variants[index].id != 'default'
+        && variants[index].size is string && variants[index].size.size() > 0 && variants[index].size.size() <= 80
+        && variants[index].inStock is bool && variants[index].sku is string
+        && variants[index].originalPrice is number && variants[index].originalPrice >= 0
+        && variants[index].discountType in ['none', 'percentage', 'fixed']
+        && variants[index].discountValue is number && variants[index].discountValue >= 0
+        && (variants[index].discountType != 'percentage' || variants[index].discountValue <= 100)
+        && (variants[index].discountType != 'fixed' || variants[index].discountValue <= variants[index].originalPrice)
+        && variants[index].discountedPrice is number && variants[index].discountedPrice >= 0 && variants[index].discountedPrice <= variants[index].originalPrice
+      );
+    }
+    function validVariants(variants) {
+      return variants is list && variants.size() <= 11
+        && validVariantAt(variants, 0) && validVariantAt(variants, 1) && validVariantAt(variants, 2)
+        && validVariantAt(variants, 3) && validVariantAt(variants, 4) && validVariantAt(variants, 5)
+        && validVariantAt(variants, 6) && validVariantAt(variants, 7) && validVariantAt(variants, 8)
+        && validVariantAt(variants, 9) && validVariantAt(variants, 10);
+    }
+    function validProduct() {
+      let p = request.resource.data;
+      return p.keys().hasAll(['name', 'slug', 'shortDescription', 'fullDescription', 'images', 'originalPrice', 'discountType', 'discountValue', 'discountedPrice', 'currency', 'size', 'fragranceNotes', 'active', 'featured', 'createdAt', 'updatedAt'])
+        && p.name is string && p.name.size() > 0 && p.name.size() <= 120
+        && p.slug is string && p.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+        && p.originalPrice is number && p.originalPrice >= 0
+        && p.discountType in ['none', 'percentage', 'fixed']
+        && p.discountValue is number && p.discountValue >= 0
+        && (p.discountType != 'percentage' || p.discountValue <= 100)
+        && (p.discountType != 'fixed' || p.discountValue <= p.originalPrice)
+        && p.discountedPrice is number && p.discountedPrice >= 0 && p.discountedPrice <= p.originalPrice
+        && p.active is bool && p.featured is bool
+        && p.images is list && p.images.size() <= 12
+        && (!p.active || p.images.size() > 0)
+        && p.fragranceNotes is map
+        && p.get('inStock', true) is bool
+        && validVariants(p.get('variants', []))
+        && p.createdAt is string && p.updatedAt is string;
+    }
+    match /products/{productId} {
+      allow read: if isAdmin() || resource.data.active == true;
+      allow create, update: if isAdmin() && validProduct();
+      allow delete: if isAdmin();
+    }
+    match /productSlugs/{slug} {
+      allow read, write: if isAdmin();
+    }
+    match /site/{documentId} {
+      // Only intentionally public configuration lives in these two documents.
+      allow read: if documentId in ['settings', 'hero'] || isAdmin();
+      allow write: if isAdmin() && documentId in ['settings', 'hero'];
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
